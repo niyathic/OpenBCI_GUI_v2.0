@@ -20,9 +20,6 @@ import org.gwoptics.graphics.graph2D.LabelPos;
 import org.gwoptics.graphics.graph2D.traces.Blank2DTrace;
 import org.gwoptics.graphics.graph2D.backgrounds.*;
 import ddf.minim.analysis.*; //for FFT
-
-import grafica.*;
-
 import java.util.*; //for Array.copyOfRange()
 
 //------------------------------------------------------------------------
@@ -31,7 +28,7 @@ import java.util.*; //for Array.copyOfRange()
 
 //GUI plotting constants
 GUI_Manager gui;
-
+color bgColor = color(1, 18, 41);
 int navBarHeight = 32;
 float default_vertScale_uV = 200.0f;  //used for vertical scale of time-domain montage plot and frequency-domain FFT plot
 float displayTime_sec = 5f;    //define how much time is shown on the time-domain montage plot (and how much is used in the FFT plot?)
@@ -79,9 +76,7 @@ class GUI_Manager {
   GridBackground gbMontage, gbFFT;
   Button stopButton;
   PlotFontInfo fontInfo;
-  
   HeadPlot headPlot1;
-  
   Button[] chanButtons;
   // Button guiPageButton;
   //boolean showImpedanceButtons;
@@ -780,7 +775,6 @@ class GUI_Manager {
     montageTrace.generate();  //graph doesn't update without this
     fftTrace.generate(); //graph doesn't update without this
     headPlot1.update();
-    //headPlot_widget.headPlot.update();
     cc.update();
 
     //update the text strings
@@ -918,7 +912,6 @@ class GUI_Manager {
   public void mousePressed(){
     verbosePrint("GUI_Manager: mousePressed: mouse pressed.");
     //if showMontage button pressed
-    
     if(showMontageButton.isMouseHere()){
       //turn off visibility of channel full controller
       cc.showFullController = false;
@@ -942,7 +935,6 @@ class GUI_Manager {
       cc.mousePressed();
     // }
     
-    
 
     //turn off visibility of graph
     // turn on drawing and interactivity of channel controller
@@ -955,8 +947,6 @@ class GUI_Manager {
     //verbosePrint("GUI_Manager: mouseReleased()");
 
     // if(mouseX >= cc.x1 && mouseX <= (cc.x2 - cc.w2) && mouseY >= cc.y1 && mouseY <= (cc.y1 + cc.h1) ){ 
-    
-      
     verbosePrint("GUI_Manager: mouseReleased(): Channel Controller mouse released...");
     cc.mouseReleased();
 
@@ -971,7 +961,6 @@ class GUI_Manager {
     showPolarityButton.setIsActive(false);
     maxDisplayFreqButton.setIsActive(false);
     biasButton.setIsActive(false);
-    
   }
  
 };

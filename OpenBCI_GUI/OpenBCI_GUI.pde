@@ -1,4 +1,3 @@
-
 ///////////////////////////////////////////////////////////////////////////////
 //
 //   GUI for controlling the ADS1299-based OpenBCI
@@ -16,9 +15,15 @@
 //   No warranty. Use at your own risk. Use for whatever you'd like.
 // 
 ////////////////////////////////////////////////////////////////////////////////
+//DM: added robot to simulate keystrokes
+import java.awt.AWTException;
+import java.awt.Robot;
+import java.awt.event.KeyEvent;
+
+Robot robot;
 
 import ddf.minim.analysis.*; //for FFT
-import ddf.minim.*;  // commented because too broad.. contains "Controller" class which is also contained in ControlP5... need to be more specific // To make sound.  Following minim example "frequencyModulation"
+//import ddf.minim.*;  // commented because too broad.. contains "Controller" class which is also contained in ControlP5... need to be more specific // To make sound.  Following minim example "frequencyModulation"
 import ddf.minim.ugens.*; // To make sound.  Following minim example "frequencyModulation"
 import java.lang.Math; //for exp, log, sqrt...they seem better than Processing's built-in
 import processing.core.PApplet;
@@ -26,11 +31,6 @@ import java.util.*; //for Array.copyOfRange()
 import java.util.Map.Entry; 
 import processing.serial.*; //for serial communication to Arduino/OpenBCI
 import java.awt.event.*; //to allow for event listener on screen resize
-import netP5.*; //for OSC networking
-import oscP5.*; //for OSC networking
-import hypermedia.net.*; //for UDP networking
-import grafica.*;
-
 
 //------------------------------------------------------------------------
 //                       Global Variables & Instances
@@ -104,20 +104,16 @@ OutputFile_rawtxt fileoutput;
 String output_fname;
 String fileName = "N/A";
 
-//variables for Networking
-int port = 0;
-String ip = "";
-String address = "";
-String data_stream = "";
-String aux_stream = "";
-UDPSend udp;
-OSCSend osc;
-LSLSend lsl;
-
 // Serial output
 String serial_output_portName = "/dev/tty.usbmodem1411";  //must edit this based on the name of the serial/COM port
 Serial serial_output;
 int serial_output_baud = 115200; //baud rate from the Arduino
+
+//fft constants
+int Nfft = 256; //set resolution of the FFT.  Use N=256 for normal, N=512 for MU waves
+FFT fftBuff[] = new FFT[nchan];   //from the minim library
+float[] smoothFac = new float[]{0.75, 0.9, 0.95, 0.98, 0.0, 0.5};
+int smoothFac_ind = 0;    //initial index into the smoothFac array
 
 //Control Panel for (re)configuring system settings
 Button controlPanelCollapser;
@@ -127,15 +123,7 @@ PlotFontInfo fontInfo;
 boolean isRunning = false;
 boolean redrawScreenNow = true;
 int openBCI_byteCount = 0;
-byte inByte = -1;    // Incoming serial data
-StringBuilder board_message;
-StringBuilder scanning_message;
-
-int dollaBillz;
-boolean isGettingPoll = false;
-boolean spaceFound = false;
-boolean scanningChannels = false;
-int hexToInt = 0;
+int inByte = -1;    // Incoming serial data
 
 //for screen resizing
 boolean screenHasBeenResized = false;
@@ -143,7 +131,7 @@ float timeOfLastScreenResize = 0;
 float timeOfGUIreinitialize = 0;
 int reinitializeGUIdelay = 125;
 //Tao's variabiles
-int widthOfLastScreen = 0;      
+int widthOfLastScreen = 0;
 int heightOfLastScreen = 0;
 
 //set window size
@@ -156,12 +144,6 @@ PFont f1;
 PFont f2;
 PFont f3;
 
-EMG_Widget motorWidget;
-
-boolean no_start_connection = false;
-boolean has_processed = false;
-boolean isOldData = false;
-
 //------------------------------------------------------------------------
 //                       Global Functions
 //------------------------------------------------------------------------
@@ -170,6 +152,13 @@ boolean isOldData = false;
 //========================SETUP============================//
 //========================SETUP============================//
 void setup() {
+  try { 
+     robot = new Robot();
+   } catch (AWTException e) {
+     e.printStackTrace();
+     exit();
+   }
+  
   println("Welcome to the Processing-based OpenBCI GUI!"); //Welcome line.
   println("Last update: 6/25/2016"); //Welcome line.
   println("For more information about how to work with this code base, please visit: http://docs.openbci.com/tutorials/01-GettingStarted");
@@ -180,15 +169,15 @@ void setup() {
   //if (frame != null) frame.setResizable(true);  //make window resizable
   //attach exit handler
   //prepareExitHandler();
-  frameRate(30); //refresh rate ... this will slow automatically, if your processor can't handle the specified rate
+  frameRate(120); //refresh rate ... this will slow automatically, if your processor can't handle the specified rate
   smooth(); //turn this off if it's too slow
 
   surface.setResizable(true);  //updated from frame.setResizable in Processing 2
   widthOfLastScreen = width; //for screen resizing (Thank's Tao)
   heightOfLastScreen = height;
 
+
   setupContainers();
-  //setupGUIWidgets(); 
 
   //V1 FONTS
   f1 = createFont("fonts/Raleway-SemiBold.otf", 16);
@@ -294,9 +283,6 @@ void initSystem() {
   }
   dataProcessing = new DataProcessing(nchan, openBCI.get_fs_Hz());
   dataProcessing_user = new DataProcessing_User(nchan, openBCI.get_fs_Hz());
-  
-  
-
 
   //initialize the data
   prepareData(dataBuffX, dataBuffY_uV, openBCI.get_fs_Hz());
@@ -342,6 +328,7 @@ void initSystem() {
       exit();
     }
     println("OpenBCI_GUI: initSystem: loading complete.  " + playbackData_table.getRowCount() + " rows of data, which is " + round(float(playbackData_table.getRowCount())/openBCI.get_fs_Hz()) + " seconds of EEG data");
+
     //removing first column of data from data file...the first column is a time index and not eeg data
     playbackData_table.removeColumn(0);
     break;
@@ -352,7 +339,6 @@ void initSystem() {
 
   //initilize the GUI
   initializeGUI();
-  setupGUIWidgets(); //####
 
   //final config
   // setBiasState(openBCI.isBiasAuto);
@@ -431,13 +417,7 @@ void systemUpdate() { // for updating data values and variables
         // }
         if ((millis() - timeOfGUIreinitialize) > reinitializeGUIdelay) { //wait 1 second for GUI to reinitialize
           try {
-
-            //-----------------------------------------------------------            
-            //-----------------------------------------------------------
             gui.update(dataProcessing.data_std_uV, data_elec_imp_ohm);
-            updateGUIWidgets(); //####
-            //-----------------------------------------------------------
-            //-----------------------------------------------------------
           } 
           catch (Exception e) {
             println(e.getMessage());
@@ -464,16 +444,6 @@ void systemUpdate() { // for updating data values and variables
       } else {
         //not enough data has arrived yet... only update the channel controller
       }
-    }else if(eegDataSource == DATASOURCE_PLAYBACKFILE && !has_processed && !isOldData) {
-      lastReadDataPacketInd = 0;
-      pointCounter = 0;
-      try{
-        process_input_file();
-      }
-      catch(Exception e){
-        isOldData = true;
-        output("Error processing timestamps, are you using old data?");
-      }
     }
 
     gui.cc.update(); //update Channel Controller even when not updating certain parts of the GUI... (this is a bit messy...)
@@ -488,9 +458,6 @@ void systemUpdate() { // for updating data values and variables
     }
 
     //re-initialize GUI if screen has been resized and it's been more than 1/2 seccond (to prevent reinitialization of GUI from happening too often)
-    if(screenHasBeenResized){
-      GUIWidgets_screenResized(width, height);
-    }
     if (screenHasBeenResized == true && (millis() - timeOfLastScreenResize) > reinitializeGUIdelay) {
       screenHasBeenResized = false;
       println("systemUpdate: reinitializing GUI");
@@ -509,7 +476,6 @@ void systemDraw() { //for drawing to the screen
 
   //redraw the screen...not every time, get paced by when data is being plotted    
   background(bgColor);  //clear the screen
-  //background(255);  //clear the screen
 
   if (systemMode == 10) {
     int drawLoopCounter_thresh = 100;
@@ -543,14 +509,7 @@ void systemDraw() { //for drawing to the screen
         noStroke();
         rect(0, 0, width, navBarHeight);
         popStyle();
-
-        //----------------------------
         gui.draw(); //draw the GUI
-        //updateGUIWidgets(); //####
-        drawGUIWidgets();
-
-        //----------------------------
-
         // playground.draw();
       } 
       catch (Exception e) {
@@ -564,9 +523,7 @@ void systemDraw() { //for drawing to the screen
     }
 
     playground.draw();
-
-    motorWidget.draw();
-    //dataProcessing_user.draw();
+    dataProcessing_user.draw();
     drawContainers();
   } else { //systemMode != 10
     //still print title information about fps
@@ -598,8 +555,7 @@ void systemDraw() { //for drawing to the screen
 
   if (drawPresentation) {
     myPresentation.draw();
-    motorWidget.drawTriggerFeedback();
-    //dataProcessing_user.drawTriggerFeedback();
+    dataProcessing_user.drawTriggerFeedback();
   }
 
   // use commented code below to verify frameRate and check latency

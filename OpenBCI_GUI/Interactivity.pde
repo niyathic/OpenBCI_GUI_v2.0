@@ -405,9 +405,6 @@ void mousePressed() {
       //was the stopButton pressed?
 
       gui.mousePressed(); // trigger mousePressed function in GUI
-
-      GUIWidgets_mousePressed(); // to replace GUI_Manager version (above) soon... cdr 7/25/16
-      
       //most of the logic below should be migrated into the GUI_Manager specific function above
 
       if (gui.stopButton.isMouseHere()) { 
@@ -565,8 +562,6 @@ void mouseReleased() {
   if (systemMode >= 10) {
 
     gui.mouseReleased();
-    GUIWidgets_mouseReleased(); // to replace GUI_Manager version (above) soon... cdr 7/25/16
-    
     redrawScreenNow = true;  //command a redraw of the GUI whenever the mouse is released
   }
 

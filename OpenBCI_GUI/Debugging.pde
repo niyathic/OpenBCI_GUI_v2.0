@@ -15,13 +15,13 @@
 //------------------------------------------------------------------------
 
 //set true if you want more verbosity in console.. verbosePrint("print_this_thing") is used to output feedback when isVerbose = true
-boolean isVerbose = true;
+boolean isVerbose = false;
 
 //Help Widget initiation
 HelpWidget helpWidget;
 
 //use signPost(String identifier) to print 'identifier' text and time since last signPost() for debugging latency/timing issues
-boolean printSignPosts = true;
+boolean printSignPosts = false;
 float millisOfLastSignPost = 0.0;
 float millisSinceLastSignPost = 0.0;
 
